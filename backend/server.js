@@ -14,14 +14,22 @@ const PORT = process.env.PORT || 3001;
 console.log('Environment Variables Loaded:');
 console.log(`PORT: ${PORT}`);
 console.log(`JWT_SECRET: ${process.env.JWT_SECRET ? 'Set' : 'Not Set'}`);
-console.log(`DB_URL: ${process.env.DB_URL ? 'Set' : 'Not Set'}`);
+console.log(`DB_URL: ${process.env.DB_URL ? 'Set (MongoDB Atlas)' : 'Not Set'}`);
 
-// Try to connect to MongoDB but proceed anyway
+// In-memory storage as fallback when DB is not available
+const inMemoryUsers = [];
+let dbConnected = false;
+
+// Try to connect to MongoDB
 connectDB()
-  .then(() => console.log('✅ MongoDB Connected'))
+  .then(() => {
+    console.log('✅ MongoDB Atlas Connected Successfully');
+    dbConnected = true;
+  })
   .catch(err => {
-    console.log('⚠️ Warning: Database connection failed:', err.message);
-    console.log('Server will continue running without database connection');
+    console.log('⚠️ Warning: MongoDB Connection Failed:', err.message);
+    console.log('⚠️ Server will continue running with in-memory storage');
+    console.log('⚠️ Please check your MongoDB Atlas connection string in .env file');
   });
 
 // Middleware configuration
@@ -30,11 +38,11 @@ app.use(bodyParser.json());
 
 // Basic GET endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'AI TWIN Backend' });
+  res.json({ 
+    message: 'AI TWIN Backend',
+    dbStatus: dbConnected ? 'Connected to MongoDB Atlas' : 'Using in-memory storage (MongoDB not connected)'
+  });
 });
-
-// In-memory storage for demo purposes when DB is not available
-const inMemoryUsers = [];
 
 // Signup endpoint
 app.post('/api/signup', async (req, res) => {
@@ -123,12 +131,19 @@ app.post('/api/login', async (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log('\n🚀 Server Configuration:');
-  console.log(`🌐 Server is running on http://localhost:${PORT}`);
+  console.log(`🌐 Server running at: http://localhost:${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 JWT Authentication: ${process.env.JWT_SECRET ? 'Configured' : 'Using fallback key'}`);
-  console.log(`💾 Database: ${process.env.DB_URL ? 'Configured, but may not be connected' : 'Not Configured'}\n`);
-  console.log('📍 Endpoints available:');
-  console.log('   GET  /');
-  console.log('   POST /api/signup');
-  console.log('   POST /api/login\n');
+  console.log(`💾 Database: ${dbConnected ? 'Connected to MongoDB Atlas' : 'Using in-memory storage (MongoDB not connected)'}\n`);
+  
+  console.log('📍 Available Endpoints:');
+  console.log('   GET  / - Server status');
+  console.log('   POST /api/signup - Create a new user');
+  console.log('   POST /api/login - Authenticate user\n');
+  
+  if (!dbConnected) {
+    console.log('⚠️ Note: Server is running with in-memory storage.');
+    console.log('   User data will be lost when the server restarts.');
+    console.log('   To enable persistent storage, connect to MongoDB Atlas.\n');
+  }
 }); 
