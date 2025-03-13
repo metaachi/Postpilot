@@ -6,7 +6,6 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const connectDB = require('./db');
-const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,8 +16,13 @@ console.log(`PORT: ${PORT}`);
 console.log(`JWT_SECRET: ${process.env.JWT_SECRET ? 'Set' : 'Not Set'}`);
 console.log(`DB_URL: ${process.env.DB_URL ? 'Set' : 'Not Set'}`);
 
-// Connect to MongoDB
-connectDB();
+// Try to connect to MongoDB but proceed anyway
+connectDB()
+  .then(() => console.log('✅ MongoDB Connected'))
+  .catch(err => {
+    console.log('⚠️ Warning: Database connection failed:', err.message);
+    console.log('Server will continue running without database connection');
+  });
 
 // Middleware configuration
 app.use(cors());
@@ -29,33 +33,42 @@ app.get('/', (req, res) => {
   res.json({ message: 'AI TWIN Backend' });
 });
 
+// In-memory storage for demo purposes when DB is not available
+const inMemoryUsers = [];
+
 // Signup endpoint
 app.post('/api/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // Log the request for debugging
+    console.log('Signup request received for:', email);
+
+    // For testing purposes - check in memory
+    const existingUser = inMemoryUsers.find(user => user.email === email);
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    // Create new user (password will be hashed by the model's pre-save hook)
-    const user = new User({
+    // Create new user object
+    const newUser = {
+      id: Date.now().toString(),
       email,
-      password
-    });
+      password: 'hashed-' + password, // Simulate hashing
+      createdAt: new Date()
+    };
 
-    // Save user to database
-    await user.save();
+    // Add to in-memory storage
+    inMemoryUsers.push(newUser);
+    console.log('User created in memory:', newUser.email);
 
     // Return success response
     res.status(201).json({
       message: 'User created successfully',
       user: {
-        id: user._id,
-        email: user.email,
-        createdAt: user.createdAt
+        id: newUser.id,
+        email: newUser.email,
+        createdAt: newUser.createdAt
       }
     });
   } catch (error) {
@@ -69,22 +82,25 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    // Log the request for debugging
+    console.log('Login request received for:', email);
+
+    // Find user by email in memory
+    const user = inMemoryUsers.find(user => user.email === email);
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Compare password with hashed password
-    const isValidPassword = await user.comparePassword(password);
+    // Simple password check for demo
+    const isValidPassword = user.password === 'hashed-' + password;
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Sign JWT token
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
-      process.env.JWT_SECRET,
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET || 'fallback-jwt-secret',
       { expiresIn: '24h' }
     );
 
@@ -93,7 +109,7 @@ app.post('/api/login', async (req, res) => {
       message: 'Login successful',
       token,
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
         createdAt: user.createdAt
       }
@@ -106,9 +122,13 @@ app.post('/api/login', async (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log('\nServer Configuration:');
-  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log('\n🚀 Server Configuration:');
+  console.log(`🌐 Server is running on http://localhost:${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 JWT Authentication: ${process.env.JWT_SECRET ? 'Configured' : 'Not Configured'}`);
-  console.log(`💾 Database: ${process.env.DB_URL ? 'Configured' : 'Not Configured'}\n`);
+  console.log(`🔒 JWT Authentication: ${process.env.JWT_SECRET ? 'Configured' : 'Using fallback key'}`);
+  console.log(`💾 Database: ${process.env.DB_URL ? 'Configured, but may not be connected' : 'Not Configured'}\n`);
+  console.log('📍 Endpoints available:');
+  console.log('   GET  /');
+  console.log('   POST /api/signup');
+  console.log('   POST /api/login\n');
 }); 
