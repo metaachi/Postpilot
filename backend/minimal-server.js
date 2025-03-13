@@ -1,7 +1,7 @@
 // Minimal Express server for testing
 const express = require('express');
 const app = express();
-const PORT = 3002;
+const PORT = 3003;
 
 // Middleware
 app.use(express.json());
